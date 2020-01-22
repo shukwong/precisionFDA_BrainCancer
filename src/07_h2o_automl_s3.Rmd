@@ -1,0 +1,127 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(caret)
+library(pROC)
+library(h2o)
+h2o.init()
+
+seed <- 17
+```
+
+load data
+```{r}
+
+s3_features <- read_delim(here("../data/sub3/sc3_Phase1_CN_GE_FeatureMatrix.tsv"), delim="\t")
+s3_outcome <- read_delim(here("../data/sub3/sc3_Phase1_CN_GE_Outcome.tsv"), delim="\t")
+s3_phenotype <- read_delim(here("../data/sub3/sc3_Phase1_CN_GE_Phenotype.tsv"), delim="\t")
+
+rna_predictors.all.result <- scan(here("/munge/rna_borutaAllFeatures.txt"), character(), quote = "") 
+rna_predictors.overlap.result <- scan(here("/munge/rna_borutaOverlapFeatures.txt"), character(), quote = "") 
+
+cn_predictors.all.result <- scan(here("/munge/cn_borutaAllFeatures.txt"), character(), quote = "") 
+cn_predictors.overlap.result <- scan(here("/munge/cn_borutaOverlapFeatures.txt"), character(), quote = "") 
+
+```
+
+PCA 
+```{r}
+autoplot(prcomp(s3_features[,-1]))
+autoplot(prcomp(s3_features[,-1]), data = s3_phenotype, colour = 'CANCER_TYPE')
+autoplot(prcomp(s3_features[,-1]), data = s3_phenotype, colour = 'SEX')
+autoplot(prcomp(s3_features[,-1]), data = s3_phenotype, colour = 'RACE')
+autoplot(prcomp(s3_features[,-1]), data = s3_phenotype, colour = 'WHO_GRADING')
+```
+
+
+There is only one patient with UNCLASSIFIED, we will group it with UNKNOWN and change it to NA
+```{r}
+s3_phenotype <- modify_phenotypes(s3_phenotype)
+```
+
+merge data frames
+```{r}
+s3_features_with_outcome <- inner_join (s3_features, s3_outcome, by="PATIENTID")
+s3_features_with_outcome_phenotype <- inner_join (s3_features_with_outcome, s3_phenotype, by="PATIENTID")
+```
+
+one hot encoding and drop patientID, RACE and GRADING
+```{r}
+dmy <- dummyVars(" ~ CANCER_TYPE", data = s3_features_with_outcome_phenotype)
+CANCER_TYPE_encodings <- data.frame(predict(dmy, newdata = s3_features_with_outcome_phenotype))
+s3_features_with_outcome_phenotype <- cbind(s3_features_with_outcome_phenotype, CANCER_TYPE_encodings)
+
+s3_features_with_outcome_phenotype <- s3_features_with_outcome_phenotype %>% select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
+```
+
+
+split train and test data
+```{r eval=FALSE}
+s3_features_with_outcome_phenotype <- s3_features_with_outcome_phenotype %>% 
+                            mutate (SURVIVAL_STATUS = as.factor (SURVIVAL_STATUS)) %>%
+                            rename (class = SURVIVAL_STATUS)
+
+set.seed(seed)
+a <- createDataPartition(s3_features_with_outcome_phenotype$class, 
+                         p = 0.8, list=FALSE)
+
+s3_train.data_with_outcome_phenotype <- s3_features_with_outcome_phenotype[a,]
+s3_test.data_with_outcome_phenotype <- s3_features_with_outcome_phenotype[-a,]
+
+
+saveRDS(s3_train.data_with_outcome_phenotype, file = here("munge", "s3_train.data_with_outcome_phenotype.rds"))
+saveRDS(s3_test.data_with_outcome_phenotype, file = here("munge", "s3_test.data_with_outcome_phenotype.rds"))
+
+```
+
+
+h2o automl
+```{r}
+s3_features <- unique(c(cn_predictors.all.result, rna_predictors.all.result))
+
+s3_train_h2o <- as.h2o(s3_train.data_with_outcome_phenotype, destination_frame="train")
+
+s3_h2o_automl <- h2o.automl(x = s3_features, y = "class",
+                  training_frame = s3_train_h2o,
+                  balance_classes = TRUE,
+                  #max_models = 20,
+                  seed = seed,
+                  exclude_algos = c("GBM"))
+
+
+leaderboard_s3 <- h2o.get_leaderboard(s3_h2o_automl, extra_columns = "ALL")
+
+# Print all rows (instead of default 6 rows)
+print(leaderboard_s3, n = nrow(leaderboard_s3))
+
+```
+
+```{r}
+
+s3_test_h20 <- as.h2o(s3_test.data_with_outcome_phenotype, destination_frame="s3_test_h20")
+s3_pred_h2o <- h2o.predict(s3_h2o_automl@leader, s3_test_h20)
+
+confusionMatrix(as.factor(as.numeric(as.data.frame(s3_pred_h2o)[,1])-1), 
+                as.factor(s3_test.data_with_outcome_phenotype$class), positive = "1")
+```
+
+AUC
+```{r}
+
+s3_roc <- roc(as.factor(s3_test.data_with_outcome_phenotype$class), as.data.frame(s3_pred_h2o)$p1)
+auc(s3_roc)
+
+```
+
+
+save h2o model
+```{r}
+h2o.saveModel(s3_h2o_automl@leader, path = here("/results/h2o_automl_s3_model"))
+
+```

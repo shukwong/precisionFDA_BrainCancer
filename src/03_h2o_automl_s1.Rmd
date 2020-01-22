@@ -1,0 +1,73 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(caret)
+library(pROC)
+library(h2o)
+h2o.init()
+
+seed <- 17
+```
+
+load data
+```{r}
+s1_train.data_with_outcome_phenotype <- readRDS(file = here("munge", "s1_train.data_with_outcome_phenotype.rds"))
+s1_test.data_with_outcome_phenotype <- readRDS(file = here("munge", "s1_test.data_with_outcome_phenotype.rds"))
+
+predictors.all.result <- scan(here("/munge/rna_borutaAllFeatures.txt"), character(), quote = "") 
+predictors.overlap.result <- scan(here("/munge/rna_borutaOverlapFeatures.txt"), character(), quote = "") 
+
+```
+
+
+
+h2o automl
+```{r}
+
+train <- as.h2o(s1_train.data_with_outcome_phenotype, destination_frame="train")
+
+s1_h2o_automl <- h2o.automl(x = predictors.all.result, y = "class",
+                  training_frame = train,
+                  balance_classes = TRUE,
+                  #max_models = 20,
+                  seed = seed)
+
+# AutoML Leaderboard
+#lb <- s1_h2o_automl@leaderboard
+
+lb <- h2o.get_leaderboard(s1_h2o_automl, extra_columns = "ALL")
+
+# Print all rows (instead of default 6 rows)
+print(lb, n = nrow(lb))
+
+```
+
+```{r}
+
+test <- as.h2o(s1_test.data_with_outcome_phenotype, destination_frame="test")
+pred <- h2o.predict(s1_h2o_automl@leader, test)
+
+confusionMatrix(as.factor(as.numeric(as.data.frame(pred)[,1])-1), 
+                as.factor(s1_test.data_with_outcome_phenotype$class), positive = "1")
+```
+
+AUC
+```{r}
+
+roc_obj <- roc(as.factor(s1_test.data_with_outcome_phenotype$class), as.data.frame(pred)$p1)
+auc(roc_obj)
+
+```
+
+
+save h2o model
+```{r}
+h2o.saveModel(s1_h2o_automl@leader, path = here("/results/h2o_automl_rna_model"))
+
+```

@@ -1,0 +1,127 @@
+---
+title: "01_preprocess"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(ggfortify)
+source(here("/src/utils.R"))
+```
+
+
+read S1 files
+```{r}
+
+s1_rna_features <- read_delim(here("../data/sub1/sc1_Phase1_GE_FeatureMatrix.tsv"), delim="\t")
+s1_outcome <- read_delim(here("../data/sub1/sc1_Phase1_GE_Outcome.tsv"), delim="\t")
+s1_phenotype <- read_delim(here("../data/sub1/sc1_Phase1_GE_Phenotype.tsv"), delim="\t")
+
+```
+
+read S2 files
+```{r}
+
+s2_CN_features <- read_delim(here("../data/sub2/sc2_Phase1_CN_FeatureMatrix.tsv"), delim="\t")
+s2_outcome <- read_delim(here("../data/sub2/sc2_Phase1_CN_Outcome.tsv"), delim="\t")
+s2_phenotype <- read_delim(here("../data/sub2/sc2_Phase1_CN_Phenotype.tsv"), delim="\t")
+
+```
+
+read S3 files
+```{r}
+
+s3_features <- read_delim(here("../data/sub3/sc3_Phase1_CN_GE_FeatureMatrix.tsv"), delim="\t")
+s3_outcome <- read_delim(here("../data/sub3/sc3_Phase1_CN_GE_Outcome.tsv"), delim="\t")
+s3_phenotype <- read_delim(here("../data/sub3/sc3_Phase1_CN_GE_Phenotype.tsv"), delim="\t")
+
+```
+
+
+PCA for RNASeq
+```{r}
+autoplot(prcomp(s1_rna_features[,-1]))
+autoplot(prcomp(s1_rna_features[,-1]), data = s1_phenotype, colour = 'CANCER_TYPE')
+autoplot(prcomp(s1_rna_features[,-1]), data = s1_phenotype, colour = 'SEX')
+autoplot(prcomp(s1_rna_features[,-1]), data = s1_phenotype, colour = 'RACE')
+autoplot(prcomp(s1_rna_features[,-1]), data = s1_phenotype, colour = 'WHO_GRADING')
+```
+
+
+how much overlap between the 3 sets
+```{r}
+dim(s1_outcome)
+dim(s2_outcome)
+dim(s3_outcome)
+
+length(intersect(s1_outcome$PATIENTID, s2_outcome$PATIENTID))
+
+length(intersect(s1_outcome$PATIENTID, s3_outcome$PATIENTID))
+length(intersect(s2_outcome$PATIENTID, s3_outcome$PATIENTID))
+```
+
+There is only one patient with UNCLASSIFIED, we will group it with UNKNOWN and change it to NA
+```{r}
+s1_phenotype <- modify_phenotypes(s1_phenotype)
+s2_phenotype <- modify_phenotypes(s2_phenotype)
+s3_phenotype <- modify_phenotypes(s3_phenotype)
+```
+
+merge data frames
+```{r}
+s1_features_with_outcome <- inner_join (s1_rna_features, s1_outcome, by="PATIENTID")
+s1_features_with_outcome_phenotype <- inner_join (s1_features_with_outcome, s1_phenotype, by="PATIENTID")
+```
+
+do phenotypes correlate with outcome?
+```{r}
+chisq.test(table(s1_features_with_outcome_phenotype$SEX, s1_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+chisq.test(table(s1_features_with_outcome_phenotype$RACE, s1_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+chisq.test(table(s1_features_with_outcome_phenotype$WHO_GRADING, s1_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+chisq.test(table(s1_features_with_outcome_phenotype$CANCER_TYPE, s1_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+```
+
+```{r}
+
+s1_features_with_outcome_phenotype %>% 
+  group_by(CANCER_TYPE, SURVIVAL_STATUS) %>%
+  summarise(num_patient = n()) %>%                     
+  ggplot(aes(x=CANCER_TYPE, y=num_patient, fill=as.factor(SURVIVAL_STATUS))) +
+  geom_bar(stat="identity", position="fill")
+```
+
+all unclassified cases are dead, how many are unclassified?
+```{r}
+s1_features_with_outcome_phenotype %>% 
+  group_by(CANCER_TYPE, SURVIVAL_STATUS) %>%
+  summarise(num_patient = n()) 
+
+```
+
+drop patientID
+```{r}
+s1_rna_features <- s1_rna_features %>% select(-PATIENTID)
+s1_features_with_outcome <- s1_features_with_outcome %>% select(-PATIENTID)
+```
+
+one hot encoding and drop patientID, RACE and GRADING
+```{r}
+dmy <- dummyVars(" ~ CANCER_TYPE", data = s1_features_with_outcome_phenotype)
+CANCER_TYPE_encodings <- data.frame(predict(dmy, newdata = s1_features_with_outcome_phenotype))
+s1_features_with_outcome_phenotype <- cbind(s1_features_with_outcome_phenotype, CANCER_TYPE_encodings)
+
+s1_features_with_outcome_phenotype <- s1_features_with_outcome_phenotype %>% select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
+```
+
+save these
+```{r}
+saveRDS(s1_rna_features, file = here("munge", "s1_rna_features.rds"))
+saveRDS(s1_features_with_outcome, file = here("munge", "s1_features_with_outcome.rds"))
+saveRDS(s1_features_with_outcome_phenotype, file = here("munge", "s1_features_with_outcome_phenotype.rds"))
+```

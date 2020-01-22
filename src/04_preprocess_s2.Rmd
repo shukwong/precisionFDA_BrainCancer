@@ -1,0 +1,89 @@
+---
+title: "01_preprocess"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(ggfortify)
+source(here("/src/utils.R"))
+```
+
+
+read S2 files
+```{r}
+
+s2_CN_features <- read_delim(here("../data/sub2/sc2_Phase1_CN_FeatureMatrix.tsv"), delim="\t")
+s2_outcome <- read_delim(here("../data/sub2/sc2_Phase1_CN_Outcome.tsv"), delim="\t")
+s2_phenotype <- read_delim(here("../data/sub2/sc2_Phase1_CN_Phenotype.tsv"), delim="\t")
+
+```
+
+PCA for CN
+```{r}
+autoplot(prcomp(s2_CN_features[,-1]))
+autoplot(prcomp(s2_CN_features[,-1]), data = s2_phenotype, colour = 'CANCER_TYPE')
+autoplot(prcomp(s2_CN_features[,-1]), data = s2_phenotype, colour = 'SEX')
+autoplot(prcomp(s2_CN_features[,-1]), data = s2_phenotype, colour = 'RACE')
+autoplot(prcomp(s2_CN_features[,-1]), data = s2_phenotype, colour = 'WHO_GRADING')
+```
+
+
+
+There is only one patient with UNCLASSIFIED, we will group it with UNKNOWN and change it to NA
+```{r}
+s3_phenotype <- modify_phenotypes(s3_phenotype)
+```
+
+merge data frames
+```{r}
+s2_features_with_outcome <- inner_join (s2_CN_features, s2_outcome, by="PATIENTID")
+s2_features_with_outcome_phenotype <- inner_join (s2_features_with_outcome, s2_phenotype, by="PATIENTID")
+```
+
+do phenotypes correlate with outcome?
+```{r}
+chisq.test(table(s2_features_with_outcome_phenotype$SEX, s2_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+chisq.test(table(s2_features_with_outcome_phenotype$RACE, s2_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+chisq.test(table(s2_features_with_outcome_phenotype$WHO_GRADING, s2_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+chisq.test(table(s2_features_with_outcome_phenotype$CANCER_TYPE, s2_features_with_outcome_phenotype$SURVIVAL_STATUS))
+
+```
+
+```{r}
+
+s2_features_with_outcome_phenotype %>% 
+  group_by(CANCER_TYPE, SURVIVAL_STATUS) %>%
+  summarise(num_patient = n()) %>%                     
+  ggplot(aes(x=CANCER_TYPE, y=num_patient, fill=as.factor(SURVIVAL_STATUS))) +
+  geom_bar(stat="identity", position="fill")
+```
+
+
+drop patientID
+```{r}
+s2_CN_features <- s2_CN_features %>% select(-PATIENTID)
+s2_features_with_outcome <- s2_features_with_outcome %>% select(-PATIENTID)
+```
+
+one hot encoding and drop patientID, RACE and GRADING
+```{r}
+dmy <- dummyVars(" ~ CANCER_TYPE", data = s2_features_with_outcome_phenotype)
+CANCER_TYPE_encodings <- data.frame(predict(dmy, newdata = s2_features_with_outcome_phenotype))
+s2_features_with_outcome_phenotype <- cbind(s2_features_with_outcome_phenotype, CANCER_TYPE_encodings)
+
+s2_features_with_outcome_phenotype <- s2_features_with_outcome_phenotype %>% 
+                  select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
+```
+
+save these
+```{r}
+saveRDS(s2_CN_features, file = here("munge", "s2_CN_features.rds"))
+saveRDS(s2_features_with_outcome, file = here("munge", "s2_features_with_outcome.rds"))
+saveRDS(s2_features_with_outcome_phenotype, file = here("munge", "s2_features_with_outcome_phenotype.rds"))
+```

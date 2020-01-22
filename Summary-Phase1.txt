@@ -1,0 +1,148 @@
+﻿Phase 1 model summary
+This document is meant to be a summary of the models used on the Phase 1 data.
+Provide the following details for EACH sub-challenge within “Summary-Phase1.txt”
+------------------------------
+Summary-Phase1-Sub-challenge-1
+------------------------------
+a) Provide a description of model settings and parameters, and details of model building including dataset(s) description(s) used for training, cross validation and testing (number of samples, number of features, etc.) 
+
+The general idea is that we first perform feature selection, and then use h2o automl to pick the best performing model. This strategy is used in all 3 sub challenges. More Specifically, I used the idea and majority of the code from Xu et al 2019 (https://github.com/bioinformatics-xu/AutoBorutaRF/blob/master/AutoencoderBoruta.R) for feature selection. The first step is to use an autoencoder for unsupervised feature selection, top 10% of the features are picked. Then the data is randomly divided into training and test set with 80/20 split. The second step is to use Boruta, which uses random forest for selecting features that are corrected with the outcome. Since we have unbalanced classes, the majority class was divided into k groups, where k is roughly the class inbalance. Features selected from each Boruta run were concatenated.  Upon investigating the correlation of the phenotypes with the outcome, I decided to keep only the SEX and CANCER_TYPE. I assigned both "UNCLASSIFIED" and "UNKNOWN" as missing data, and did one hot encoding. Finally, I used h2o automl to train the model with selected features as well as SEX and one hot encoded CANCER_TYPE. Default parameters were used for h2o automl except that balance_classes is set to TRUE,which tells automl to oversample the minority classes to balance the class distribution. The best performing model is evaluated against the test set.   
+
+b) Short listed features selected by the model
+AKR1C4
+DPY19L1P1
+GRB14
+LINC00619
+MIR548XHG
+NUDT13
+RPS6KL1
+SLC38A3
+SPARCL1
+SYCP2
+ULBP2
+ZHX1.C8orf76
+ADGRG6
+ALOX12.AS1
+BBS2
+CALCB
+CCDC142
+CTH
+DHRS1
+DLX6.AS1
+GRTP1
+HAUS2
+MATN3
+MPG
+MTOR
+MYOC
+NIT1
+PLAA
+TRPT1
+ATP6V0E2.AS1
+CD47
+IDH3B
+LINC01858
+LRRC37B
+NPHP3
+PLEKHA3
+SNED1
+THYN1
+ZNF785
+ANKS1A
+APMAP
+CDKN2B
+CHODL
+CYP2J2
+DHRS7
+ETFDH
+KNSTRN
+LINC01116
+LPCAT1
+PHF20
+SHISA9
+TAL1
+ABCC4
+GGNBP2
+GRIK1
+LGR4
+PDPR
+DUSP1
+EIF4ENIF1
+FOXA1
+HMGB4
+HOXC9
+LINC02114
+LOC644135
+SEX
+CANCER_TYPE
+
+c) Link to complete code in a public GitHub repository 
+
+d) Confusion matrix indicating number of predictions, true positives, false positives, true negatives, and false negatives 
+
+e) Overall accuracy 
+
+f) Specificity
+
+g) Sensitivity 
+
+h) Area under the curve (AUC)
+
+------------------------------
+Summary-Phase1-Sub-challenge-2
+------------------------------
+a) Provide a description of model settings and parameters, and details of model building including dataset(s) description(s) used for training, cross validation and testing (number of samples, number of features, etc.) 
+
+The methods were the same as sub challenge 1 except that I excluded GBM as one of the algorithms to be tested for automl. It seems to have some problems with a small number of samples. 
+
+
+b) Short listed features selected by the model
+
+5q33.2
+9p24.3
+9q33.2
+14q22.3
+20p11.22
+22q13.33
+2q21.3
+3q26.32
+SEX
+CANCER_TYPE
+
+
+c) Link to complete code in a public GitHub repository 
+
+d) Confusion matrix indicating number of predictions, true positives, false positives, true negatives, and false negatives 
+
+e) Overall accuracy 
+
+f) Specificity
+
+g) Sensitivity 
+
+h) Area under the curve (AUC)
+
+------------------------------
+Summary-Phase1-Sub-challenge-3
+------------------------------
+a) Provide a description of model settings and parameters, and details of model building including dataset(s) description(s) used for training, cross validation and testing (number of samples, number of features, etc.) 
+
+The features selected in sub challenge 1 and 2 were used for h2o automl.  The rest of methods were the same as sub challenge 1 except that I excluded GBM as one of the algorithms to be tested for automl. It seems t have some problems with a small number of samples. 
+
+b) Short listed features selected by the model
+
+c) Link to complete code in a public GitHub repository 
+
+d) Confusion matrix indicating number of predictions, true positives, false positives, true negatives, and false negatives 
+
+e) Overall accuracy 
+
+f) Specificity
+
+g) Sensitivity 
+
+h) Area under the curve (AUC)
+
+Reference
+
+Xu X, Gu H, Wang Y, Wang J, Qin P. Autoencoder Based Feature Selection Method for Classification of Anticancer Drug Response. Front Genet. 2019;10: 233.
