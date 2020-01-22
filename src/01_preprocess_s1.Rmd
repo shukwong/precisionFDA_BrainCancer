@@ -110,13 +110,14 @@ s1_rna_features <- s1_rna_features %>% select(-PATIENTID)
 s1_features_with_outcome <- s1_features_with_outcome %>% select(-PATIENTID)
 ```
 
-one hot encoding and drop patientID, RACE and GRADING
+one hot encoding 
+# and drop patientID, RACE and GRADING
 ```{r}
 dmy <- dummyVars(" ~ CANCER_TYPE", data = s1_features_with_outcome_phenotype)
 CANCER_TYPE_encodings <- data.frame(predict(dmy, newdata = s1_features_with_outcome_phenotype))
 s1_features_with_outcome_phenotype <- cbind(s1_features_with_outcome_phenotype, CANCER_TYPE_encodings)
 
-s1_features_with_outcome_phenotype <- s1_features_with_outcome_phenotype %>% select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
+#s1_features_with_outcome_phenotype <- s1_features_with_outcome_phenotype %>% select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
 ```
 
 save these

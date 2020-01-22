@@ -48,7 +48,7 @@ write.table(variable.import_CN, file = here("/munge/cn_autoVarImport.txt"),
 only keep the important features
 ```{r}
 
-s2_features_with_outcome_phenotype <- s2_features_with_outcome_phenotype[, which(colnames(s2_features_with_outcome_phenotype) %in% c("SURVIVAL_STATUS", "SEX", "CANCER_TYPEASTROCYTOMA", "CANCER_TYPEGBM", "CANCER_TYPEMIXED",              "CANCER_TYPEOLIGODENDROGLIOMA",     import.feature_CN))]
+s2_features_with_outcome_phenotype <- s2_features_with_outcome_phenotype[, which(colnames(s2_features_with_outcome_phenotype) %in% c("PATIENTID", "SURVIVAL_STATUS", "SEX", "CANCER_TYPEASTROCYTOMA", "CANCER_TYPEGBM", "CANCER_TYPEMIXED",              "CANCER_TYPEOLIGODENDROGLIOMA",     import.feature_CN))]
 
 ```
 
@@ -71,7 +71,7 @@ saveRDS(s2_test.data_with_outcome_phenotype, file = here("munge", "s2_test.data_
 
 ```{r}
 
-train_data_boruta <- s2_train.data_with_outcome_phenotype %>% select (-SEX, -CANCER_TYPEASTROCYTOMA, -CANCER_TYPEGBM, -CANCER_TYPEMIXED, -CANCER_TYPEOLIGODENDROGLIOMA)
+train_data_boruta <- s2_train.data_with_outcome_phenotype %>% select (-PATIENTID, -SEX, -CANCER_TYPEASTROCYTOMA, -CANCER_TYPEGBM, -CANCER_TYPEMIXED, -CANCER_TYPEOLIGODENDROGLIOMA)
 
 predictors.ensemble_CN <- unbalancedFeatureSelectionFromBoruta(train_data_boruta, seed, 0.1)
 

@@ -51,18 +51,21 @@ s3_features_with_outcome <- inner_join (s3_features, s3_outcome, by="PATIENTID")
 s3_features_with_outcome_phenotype <- inner_join (s3_features_with_outcome, s3_phenotype, by="PATIENTID")
 ```
 
-one hot encoding and drop patientID, RACE and GRADING
+one hot encoding 
+#and drop patientID, RACE and GRADING
 ```{r}
 dmy <- dummyVars(" ~ CANCER_TYPE", data = s3_features_with_outcome_phenotype)
 CANCER_TYPE_encodings <- data.frame(predict(dmy, newdata = s3_features_with_outcome_phenotype))
 s3_features_with_outcome_phenotype <- cbind(s3_features_with_outcome_phenotype, CANCER_TYPE_encodings)
 
-s3_features_with_outcome_phenotype <- s3_features_with_outcome_phenotype %>% select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
+#s3_features_with_outcome_phenotype <- s3_features_with_outcome_phenotype %>% select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
+
+saveRDS(s3_features_with_outcome_phenotype, file = here("munge", "s3_features_with_outcome_phenotype.rds"))
 ```
 
 
 split train and test data
-```{r eval=FALSE}
+```{r}
 s3_features_with_outcome_phenotype <- s3_features_with_outcome_phenotype %>% 
                             mutate (SURVIVAL_STATUS = as.factor (SURVIVAL_STATUS)) %>%
                             rename (class = SURVIVAL_STATUS)

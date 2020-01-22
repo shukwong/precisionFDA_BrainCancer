@@ -78,7 +78,7 @@ CANCER_TYPE_encodings <- data.frame(predict(dmy, newdata = s2_features_with_outc
 s2_features_with_outcome_phenotype <- cbind(s2_features_with_outcome_phenotype, CANCER_TYPE_encodings)
 
 s2_features_with_outcome_phenotype <- s2_features_with_outcome_phenotype %>% 
-                  select(-PATIENTID, -RACE,  -WHO_GRADING, -CANCER_TYPE )
+                  select(-RACE,  -WHO_GRADING, -CANCER_TYPE )
 ```
 
 save these

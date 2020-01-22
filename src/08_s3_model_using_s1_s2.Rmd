@@ -1,0 +1,96 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+Here I will use the models trained in s1 and s2 for the prediction model in s3
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(caret)
+library(pROC)
+library(h2o)
+h2o.init()
+
+seed <- 17
+```
+
+load data and models
+```{r}
+s3_features_with_outcome_phenotype <- readRDS(file = here("munge", "s3_features_with_outcome_phenotype.rds"))
+
+rna_predictors.all.result <- scan(here("/munge/rna_borutaAllFeatures.txt"), character(), quote = "") 
+rna_predictors.overlap.result <- scan(here("/munge/rna_borutaOverlapFeatures.txt"), character(), quote = "") 
+
+cn_predictors.all.result <- scan(here("/munge/cn_borutaAllFeatures.txt"), character(), quote = "") 
+cn_predictors.overlap.result <- scan(here("/munge/cn_borutaOverlapFeatures.txt"), character(), quote = "") 
+
+rna_model <- h2o.loadModel(path = here("/results/h2o_automl_rna_model//DeepLearning_grid__1_AutoML_20200122_013655_model_1"))
+cn_model <-  h2o.loadModel(path = here("/results/h2o_automl_cn_model/DeepLearning_grid__1_AutoML_20200122_041609_model_1"))
+  
+s1_test.data_with_outcome_phenotype <- readRDS(file = here("munge", "s1_test.data_with_outcome_phenotype.rds"))
+s2_test.data_with_outcome_phenotype <- readRDS(file = here("munge", "s2_test.data_with_outcome_phenotype.rds"))
+```
+
+test data as intersect and union of the test sets before
+it seems that the intersect has too few samples, we will test on the union
+```{r}
+
+test_patientIDs_intersect <- intersect (s1_test.data_with_outcome_phenotype$PATIENTID, s2_test.data_with_outcome_phenotype$PATIENTID)
+
+test_patientIDs_union <- union (s1_test.data_with_outcome_phenotype$PATIENTID, s2_test.data_with_outcome_phenotype$PATIENTID)
+
+length(test_patientIDs_intersect)
+length(test_patientIDs_union)
+
+```
+
+Generate test set:
+on hot encoding
+change SURVIVAL_STATUS to class
+```{r}
+testset_s3 <- s3_features_with_outcome_phenotype %>% filter (PATIENTID %in% test_patientIDs_union)
+table(testset_s3$SURVIVAL_STATUS)
+
+
+testset_s3 <- testset_s3 %>% 
+                            mutate (SURVIVAL_STATUS = as.factor (SURVIVAL_STATUS)) %>%
+                            rename (class = SURVIVAL_STATUS)
+
+```
+
+
+accuracy of rna model: 0.88
+accuracy of cn model: 0.6176
+take a weighted prediction from the two models
+```{r}
+testset_s3_h2o <- as.h2o(testset_s3, destination_frame="testset_s3_h2o")
+
+testset_s3_rna_pred <- as.data.frame(h2o.predict(rna_model, testset_s3_h2o))
+testset_s3_cn_pred <- as.data.frame(h2o.predict(cn_model, testset_s3_h2o))
+
+testset_s3_rna_cn_pred <- data.frame( p1=(testset_s3_rna_pred$p1*0.88 + testset_s3_cn_pred$p1*0.6176)/(0.88+0.6176) )  %>%
+                          mutate(predict = if_else (p1>=0.5, 1, 0))
+
+```
+
+confusion matrix
+```{r}
+
+
+confusionMatrix(as.factor(testset_s3_rna_cn_pred$predict), 
+                as.factor(testset_s3$class), positive = "1")
+
+```
+
+AUC
+```{r}
+s3_roc <- roc(as.factor(testset_s3$class), testset_s3_rna_cn_pred$p1)
+auc(s3_roc)
+
+```
